@@ -1,0 +1,91 @@
+name: Update Almflair availability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-calendar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Feratel-Kalender abrufen
+        env:
+          FERATEL_ICAL_URL: ${{ secrets.FERATEL_ICAL_URL }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import urllib.request
+          import json
+          import re
+          from datetime import datetime, timedelta
+
+          url = os.environ["FERATEL_ICAL_URL"]
+
+          req = urllib.request.Request(
+              url,
+              headers={"User-Agent": "Almflair-Availability-Calendar/1.0"}
+          )
+
+          with urllib.request.urlopen(req, timeout=30) as response:
+              ics = response.read().decode("utf-8", errors="replace")
+
+          busy_dates = set()
+
+          events = re.findall(
+              r"BEGIN:VEVENT(.*?)END:VEVENT",
+              ics,
+              flags=re.DOTALL
+          )
+
+          for event in events:
+              start_match = re.search(
+                  r"DTSTART(?:;[^:]*)?:(\d{8})",
+                  event
+              )
+              end_match = re.search(
+                  r"DTEND(?:;[^:]*)?:(\d{8})",
+                  event
+              )
+
+              if not start_match or not end_match:
+                  continue
+
+              start = datetime.strptime(
+                  start_match.group(1), "%Y%m%d"
+              ).date()
+
+              end = datetime.strptime(
+                  end_match.group(1), "%Y%m%d"
+              ).date()
+
+              day = start
+              while day < end:
+                  busy_dates.add(day.isoformat())
+                  day += timedelta(days=1)
+
+          data = {
+              "updated": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+              "busy": sorted(busy_dates)
+          }
+
+          with open("availability.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+
+          print(f"{len(busy_dates)} gesperrte Tage verarbeitet.")
+          PY
+
+      - name: Änderungen speichern
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add availability.json
+          git diff --cached --quiet || git commit -m "Update availability"
+          git push
