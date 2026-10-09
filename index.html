@@ -4,188 +4,60 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Almflair – Verfügbarkeit</title>
-
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      padding: 20px;
-      font-family: Arial, sans-serif;
-      color: #333;
-      background: #fff;
-    }
-
-    .calendar-wrap {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-
-    h2 {
-      text-align: center;
-      margin: 0 0 18px;
-      font-size: 26px;
-    }
-
-    .navigation {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 18px;
-    }
-
-    .navigation button {
-      border: 1px solid #aaa;
-      background: #fff;
-      border-radius: 6px;
-      padding: 8px 14px;
-      cursor: pointer;
-      font-size: 15px;
-    }
-
-    .months {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 24px;
-    }
-
-    .month-title {
-      text-align: center;
-      font-size: 20px;
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
-
-    .calendar {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 4px;
-    }
-
-    .weekday {
-      text-align: center;
-      font-weight: bold;
-      padding: 6px 2px;
-      font-size: 14px;
-    }
-
-    .day {
-      min-height: 42px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 5px;
-      font-size: 15px;
-    }
-
-    .available {
-      background: #dff2df;
-      border: 1px solid #8ebc8e;
-    }
-
-    .busy {
-      background: #eee;
-      color: #777;
-      border: 1px solid #ccc;
-      text-decoration: line-through;
-    }
-
-    .empty {
-      background: transparent;
-    }
-
-    .legend {
-      display: flex;
-      justify-content: center;
-      gap: 24px;
-      margin-top: 22px;
-      font-size: 14px;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-    }
-
-    .box {
-      width: 18px;
-      height: 18px;
-      border-radius: 4px;
-    }
-
-    .box.available {
-      display: inline-block;
-    }
-
-    .box.busy {
-      display: inline-block;
-    }
-
-    .note {
-      text-align: center;
-      margin-top: 14px;
-      font-size: 13px;
-      color: #666;
-    }
-
-    @media (max-width: 650px) {
-      .months {
-        grid-template-columns: 1fr;
-      }
-
-      body {
-        padding: 10px;
-      }
-    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px; font-family: Arial, sans-serif; color: #333; background: #fff; }
+    .calendar-wrap { max-width: 900px; margin: 0 auto; }
+    .navigation { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    .navigation button { border: 1px solid #aaa; background: #fff; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 15px; }
+    .months { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .month-title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+    .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .weekday { text-align: center; font-weight: bold; padding: 6px 2px; font-size: 14px; }
+    .day { min-height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 5px; font-size: 15px; }
+    .available { background: #dff2df; border: 1px solid #8ebc8e; }
+    .busy { background: #eee; color: #777; border: 1px solid #ccc; text-decoration: line-through; }
+    .empty { background: transparent; }
+    .legend { display: flex; justify-content: center; gap: 24px; margin-top: 22px; font-size: 14px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; }
+    .box { width: 18px; height: 18px; border-radius: 4px; }
+    .box.available, .box.busy { display: inline-block; }
+    .note { text-align: center; margin-top: 14px; font-size: 13px; color: #666; }
+    @media (max-width: 650px) { .months { grid-template-columns: 1fr; } body { padding: 10px; } }
   </style>
 </head>
-
 <body>
-
 <div class="calendar-wrap">
-
-  <h2>Verfügbarkeit Almflair</h2>
-
   <div class="navigation">
     <button id="prev">‹ Zurück</button>
     <button id="next">Weiter ›</button>
   </div>
-
   <div id="months" class="months"></div>
-
   <div class="legend">
-    <div class="legend-item">
-      <span class="box available"></span>
-      verfügbar
-    </div>
-
-    <div class="legend-item">
-      <span class="box busy"></span>
-      nicht verfügbar
-    </div>
+    <div class="legend-item"><span class="box available"></span>verfügbar</div>
+    <div class="legend-item"><span class="box busy"></span>nicht verfügbar</div>
   </div>
-
-  <div class="note">
-    Angaben ohne Gewähr. Verfügbarkeit kann sich kurzfristig ändern.
-  </div>
-
+  <div class="note">Angaben ohne Gewähr. Verfügbarkeit kann sich kurzfristig ändern.</div>
 </div>
-
 <script>
 const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-
 let busyDates = new Set();
 let currentMonth = new Date();
 currentMonth.setDate(1);
 
+// Höhenmeldung an die einbettende Jimdo-Seite. Keine Buchungsdaten übertragen.
+function reportHeight() {
+  const content = document.querySelector(".calendar-wrap");
+  const height = Math.ceil(content.getBoundingClientRect().bottom +
+    parseFloat(getComputedStyle(document.body).paddingBottom || "0"));
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: "almflair-calendar-height", height }, "*");
+  }
+}
+
 fetch("availability.json")
   .then(response => {
-    if (!response.ok) {
-      throw new Error("availability.json konnte nicht geladen werden");
-    }
+    if (!response.ok) throw new Error("availability.json konnte nicht geladen werden");
     return response.json();
   })
   .then(data => {
@@ -196,63 +68,42 @@ fetch("availability.json")
     console.error(error);
     document.getElementById("months").innerHTML =
       "<p>Der Verfügbarkeitskalender konnte momentan nicht geladen werden.</p>";
+    reportHeight();
   });
 
 function dateKey(year, month, day) {
-  return (
-    year +
-    "-" +
-    String(month + 1).padStart(2, "0") +
-    "-" +
-    String(day).padStart(2, "0")
-  );
+  return year + "-" + String(month + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
 }
 
 function createMonth(date) {
-
   const year = date.getFullYear();
   const month = date.getMonth();
-
   const container = document.createElement("div");
-
   const title = document.createElement("div");
   title.className = "month-title";
-  title.textContent = date.toLocaleDateString("de-DE", {
-    month: "long",
-    year: "numeric"
-  });
-
+  title.textContent = date.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
   container.appendChild(title);
-
   const calendar = document.createElement("div");
   calendar.className = "calendar";
-
   weekdays.forEach(day => {
     const el = document.createElement("div");
     el.className = "weekday";
     el.textContent = day;
     calendar.appendChild(el);
   });
-
   const firstDay = new Date(year, month, 1);
   const offset = (firstDay.getDay() + 6) % 7;
-
   for (let i = 0; i < offset; i++) {
     const empty = document.createElement("div");
     empty.className = "day empty";
     calendar.appendChild(empty);
   }
-
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   for (let day = 1; day <= daysInMonth; day++) {
-
     const key = dateKey(year, month, day);
-
     const el = document.createElement("div");
     el.className = "day";
     el.textContent = day;
-
     if (busyDates.has(key)) {
       el.classList.add("busy");
       el.title = "Nicht verfügbar";
@@ -260,46 +111,36 @@ function createMonth(date) {
       el.classList.add("available");
       el.title = "Verfügbar";
     }
-
     calendar.appendChild(el);
   }
-
   container.appendChild(calendar);
-
   return container;
 }
 
 function render() {
-
   const months = document.getElementById("months");
   months.innerHTML = "";
-
-  const first = new Date(
-    currentMonth.getFullYear(),
-    currentMonth.getMonth(),
-    1
-  );
-
-  const second = new Date(
-    currentMonth.getFullYear(),
-    currentMonth.getMonth() + 1,
-    1
-  );
-
+  const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+  const second = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
   months.appendChild(createMonth(first));
   months.appendChild(createMonth(second));
+  requestAnimationFrame(reportHeight);
 }
 
 document.getElementById("prev").addEventListener("click", () => {
   currentMonth.setMonth(currentMonth.getMonth() - 1);
   render();
 });
-
 document.getElementById("next").addEventListener("click", () => {
   currentMonth.setMonth(currentMonth.getMonth() + 1);
   render();
 });
+window.addEventListener("resize", reportHeight);
+window.addEventListener("load", reportHeight);
+// Beim Start und nach Größenänderungen des Inhalts erneut melden.
+if (typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(reportHeight).observe(document.querySelector(".calendar-wrap"));
+}
 </script>
-
 </body>
 </html>
