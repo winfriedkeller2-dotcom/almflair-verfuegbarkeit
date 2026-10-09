@@ -43,6 +43,8 @@
 </div>
 <script>
 const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const lastAvailableDay = new Date(2028, 0, 31);
+const lastStartMonth = new Date(2028, 0, 1); // Letzte Ansicht: Januar und Februar 2028.
 let busyDates = new Set();
 let currentMonth = new Date();
 currentMonth.setDate(1);
@@ -120,6 +122,9 @@ function createMonth(date) {
     if (cellDate <= todayStart()) {
       el.classList.add("past");
       el.title = "Vergangenes Datum / heute – nicht verfügbar";
+    } else if (cellDate > lastAvailableDay) {
+      el.classList.add("past");
+      el.title = "Außerhalb des freigegebenen Buchungszeitraums – nicht verfügbar";
     } else if (busyDates.has(key)) {
       el.classList.add("busy");
       el.title = "Nicht verfügbar";
@@ -135,9 +140,9 @@ function createMonth(date) {
 
 function render() {
   if (currentMonth < firstCurrentMonth()) currentMonth = firstCurrentMonth();
-  document.getElementById("prev").disabled =
-    currentMonth.getFullYear() === firstCurrentMonth().getFullYear() &&
-    currentMonth.getMonth() === firstCurrentMonth().getMonth();
+  if (currentMonth > lastStartMonth) currentMonth = new Date(lastStartMonth);
+  document.getElementById("prev").disabled = currentMonth <= firstCurrentMonth();
+  document.getElementById("next").disabled = currentMonth >= lastStartMonth;
   const months = document.getElementById("months");
   months.innerHTML = "";
   const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
@@ -153,6 +158,7 @@ document.getElementById("prev").addEventListener("click", () => {
   render();
 });
 document.getElementById("next").addEventListener("click", () => {
+  if (currentMonth >= lastStartMonth) return;
   currentMonth.setMonth(currentMonth.getMonth() + 1);
   render();
 });
