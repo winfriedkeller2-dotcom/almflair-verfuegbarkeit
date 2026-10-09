@@ -17,6 +17,8 @@
     .day { min-height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 5px; font-size: 15px; }
     .available { background: #dff2df; border: 1px solid #8ebc8e; }
     .busy { background: #eee; color: #777; border: 1px solid #ccc; text-decoration: line-through; }
+    .past { background: #eee; color: #777; border: 1px solid #ccc; }
+    .navigation button:disabled { opacity: 0.45; cursor: not-allowed; }
     .empty { background: transparent; }
     .legend { display: flex; justify-content: center; gap: 24px; margin-top: 22px; font-size: 14px; }
     .legend-item { display: flex; align-items: center; gap: 7px; }
@@ -44,6 +46,16 @@ const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 let busyDates = new Set();
 let currentMonth = new Date();
 currentMonth.setDate(1);
+
+// Tagesvergleich ohne Uhrzeit: auch der heutige Tag gilt als nicht verfügbar.
+function todayStart() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+function firstCurrentMonth() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
 
 // Höhenmeldung an die einbettende Jimdo-Seite. Keine Buchungsdaten übertragen.
 function reportHeight() {
@@ -104,7 +116,11 @@ function createMonth(date) {
     const el = document.createElement("div");
     el.className = "day";
     el.textContent = day;
-    if (busyDates.has(key)) {
+    const cellDate = new Date(year, month, day);
+    if (cellDate <= todayStart()) {
+      el.classList.add("past");
+      el.title = "Vergangenes Datum / heute – nicht verfügbar";
+    } else if (busyDates.has(key)) {
       el.classList.add("busy");
       el.title = "Nicht verfügbar";
     } else {
@@ -118,6 +134,10 @@ function createMonth(date) {
 }
 
 function render() {
+  if (currentMonth < firstCurrentMonth()) currentMonth = firstCurrentMonth();
+  document.getElementById("prev").disabled =
+    currentMonth.getFullYear() === firstCurrentMonth().getFullYear() &&
+    currentMonth.getMonth() === firstCurrentMonth().getMonth();
   const months = document.getElementById("months");
   months.innerHTML = "";
   const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
@@ -128,6 +148,7 @@ function render() {
 }
 
 document.getElementById("prev").addEventListener("click", () => {
+  if (currentMonth <= firstCurrentMonth()) return;
   currentMonth.setMonth(currentMonth.getMonth() - 1);
   render();
 });
