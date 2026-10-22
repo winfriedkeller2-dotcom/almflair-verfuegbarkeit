@@ -1,3 +1,4 @@
+
 name: Update Almflair availability
 
 on:
@@ -16,93 +17,189 @@ jobs:
       - name: Repository laden
         uses: actions/checkout@v4
 
-      - name: Feratel und Booking.com Kalender abrufen
+      - name: Feratel, Booking.com und Airbnb Kalender abrufen
         env:
           FERATEL_ICAL_URL: ${{ secrets.FERATEL_ICAL_URL }}
           BOOKING_ICAL_URL: ${{ secrets.BOOKING_ICAL_URL }}
+          AIRBNB_ICAL_URL: ${{ secrets.AIRBNB_ICAL_URL }}
         run: |
           python3 - <<'PY'
           import json
           import os
           import re
           import urllib.request
-          from datetime import date, datetime, timedelta, timezone
+          from datetime import datetime, timedelta, timezone
 
           def download(source, env_name):
               url = os.environ.get(env_name, "").strip()
               if not url.startswith("https://"):
-                  raise ValueError(f"{source}: HTTPS-iCal-Adresse fehlt oder ist ungueltig")
+                  raise ValueError(
+                      f"{source}: HTTPS-iCal-Adresse fehlt oder ist ungueltig"
+                  )
+
               request = urllib.request.Request(
-                  url, headers={"User-Agent": "Almflair-Availability-Calendar/2.0"}
+                  url,
+                  headers={
+                      "User-Agent": "Almflair-Availability-Calendar/2.0"
+                  }
               )
-              with urllib.request.urlopen(request, timeout=30) as response:
+
+              with urllib.request.urlopen(
+                  request, timeout=30
+              ) as response:
                   content = response.read().decode("utf-8-sig")
-              if "BEGIN:VCALENDAR" not in content or "END:VCALENDAR" not in content:
-                  raise ValueError(f"{source}: Antwort ist kein gueltiger iCal-Kalender")
+
+              if (
+                  "BEGIN:VCALENDAR" not in content
+                  or "END:VCALENDAR" not in content
+              ):
+                  raise ValueError(
+                      f"{source}: Antwort ist kein gueltiger iCal-Kalender"
+                  )
+
               return content
 
           def blocked_days(content, source):
-              # Gefaltete iCal-Zeilen wieder zusammenfuehren.
+              # Gefaltete iCal-Zeilen zusammenfuehren.
               content = re.sub(r"\r?\n[ \t]", "", content)
-              events = re.findall(r"(?m)^BEGIN:VEVENT\s*\r?\n(.*?)^END:VEVENT\s*$", content, re.DOTALL | re.MULTILINE)
+
+              events = re.findall(
+                  r"(?m)^BEGIN:VEVENT\s*\r?\n(.*?)^END:VEVENT\s*$",
+                  content,
+                  re.DOTALL | re.MULTILINE
+              )
+
               if not events:
-                  raise ValueError(f"{source}: Keine Kalenderereignisse gefunden; Daten unveraendert")
+                  raise ValueError(
+                      f"{source}: Keine Kalenderereignisse gefunden; "
+                      "Daten unveraendert"
+                  )
 
               days = set()
+
               for event in events:
-                  lines = event.splitlines()
                   fields = {}
-                  for line in lines:
+
+                  for line in event.splitlines():
                       if ":" not in line:
                           continue
+
                       key, value = line.split(":", 1)
                       field_name = key.split(";", 1)[0].upper()
-                      fields.setdefault(field_name, []).append((key.upper(), value.strip()))
 
-                  if any(value.upper() == "CANCELLED" for _, value in fields.get("STATUS", [])):
+                      fields.setdefault(field_name, []).append(
+                          (key.upper(), value.strip())
+                      )
+
+                  if any(
+                      value.upper() == "CANCELLED"
+                      for _, value in fields.get("STATUS", [])
+                  ):
                       continue
-                  if any(value.upper() == "TRANSPARENT" for _, value in fields.get("TRANSP", [])):
+
+                  if any(
+                      value.upper() == "TRANSPARENT"
+                      for _, value in fields.get("TRANSP", [])
+                  ):
                       continue
 
                   def read_date(field):
                       matches = fields.get(field, [])
+
                       if len(matches) != 1:
-                          raise ValueError(f"{source}: Ereignis ohne eindeutiges {field}")
+                          raise ValueError(
+                              f"{source}: Ereignis ohne eindeutiges {field}"
+                          )
+
                       key, value = matches[0]
-                      if ";VALUE=DATE" not in key and not re.fullmatch(r"\d{8}", value):
-                          raise ValueError(f"{source}: Nicht unterstuetztes {field}-Format")
+
+                      if (
+                          ";VALUE=DATE" not in key
+                          and not re.fullmatch(r"\d{8}", value)
+                      ):
+                          raise ValueError(
+                              f"{source}: Nicht unterstuetztes {field}-Format"
+                          )
+
                       if not re.fullmatch(r"\d{8}", value):
-                          raise ValueError(f"{source}: Nicht unterstuetztes {field}-Datum")
-                      return datetime.strptime(value, "%Y%m%d").date()
+                          raise ValueError(
+                              f"{source}: Nicht unterstuetztes {field}-Datum"
+                          )
+
+                      return datetime.strptime(
+                          value, "%Y%m%d"
+                      ).date()
 
                   start = read_date("DTSTART")
-                  end = read_date("DTEND")  # Abreisetag ist exklusiv.
-                  if end <= start or (end - start).days > 366:
-                      raise ValueError(f"{source}: Unplausibler Belegungszeitraum")
+                  end = read_date("DTEND")
+
+                  # Abreisetag ist exklusiv.
+                  if (
+                      end <= start
+                      or (end - start).days > 366
+                  ):
+                      raise ValueError(
+                          f"{source}: Unplausibler Belegungszeitraum"
+                      )
+
                   day = start
+
                   while day < end:
                       days.add(day.isoformat())
                       day += timedelta(days=1)
+
               return days, len(events)
 
-          # Erst beide Quellen vollstaendig pruefen; bei Fehler keine JSON-Datei schreiben.
+          # Alle drei Kalender vollstaendig pruefen.
+          # Bei einem Fehler bleibt availability.json unveraendert.
           all_days = set()
+
           for source, secret in (
               ("Feratel", "FERATEL_ICAL_URL"),
               ("Booking.com", "BOOKING_ICAL_URL"),
+              ("Airbnb", "AIRBNB_ICAL_URL"),
           ):
-              days, count = blocked_days(download(source, secret), source)
-              print(f"{source}: {count} Ereignisse, {len(days)} gesperrte Tage")
+              days, count = blocked_days(
+                  download(source, secret), source
+              )
+
+              print(
+                  f"{source}: {count} Ereignisse, "
+                  f"{len(days)} gesperrte Tage"
+              )
+
               all_days.update(days)
 
           result = {
-              "updated": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+              "updated": (
+                  datetime.now(timezone.utc)
+                  .isoformat(timespec="seconds")
+                  .replace("+00:00", "Z")
+              ),
               "busy": sorted(all_days),
           }
-          with open("availability.json.tmp", "w", encoding="utf-8") as output:
-              json.dump(result, output, ensure_ascii=False, indent=2)
-          os.replace("availability.json.tmp", "availability.json")
-          print(f"Zusammengefuehrt: {len(all_days)} gesperrte Tage")
+
+          with open(
+              "availability.json.tmp",
+              "w",
+              encoding="utf-8"
+          ) as output:
+              json.dump(
+                  result,
+                  output,
+                  ensure_ascii=False,
+                  indent=2
+              )
+
+          os.replace(
+              "availability.json.tmp",
+              "availability.json"
+          )
+
+          print(
+              f"Zusammengefuehrt: "
+              f"{len(all_days)} gesperrte Tage"
+          )
           PY
 
       - name: Änderungen speichern
@@ -110,5 +207,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add availability.json
-          git diff --cached --quiet || git commit -m "Update availability from Feratel and Booking.com"
+          git diff --cached --quiet || git commit -m "Update availability from Feratel, Booking.com and Airbnb"
           git push
