@@ -4,14 +4,5 @@ PRODID:-//Almflair//iCal Sperrkalender Test//DE
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:Almflair Sperrkalender Test
-BEGIN:VEVENT
-UID:almflair-test-20271115-20271117@winfriedkeller2-dotcom.github.io
-DTSTAMP:20261104T124918Z
-DTSTART;VALUE=DATE:20271115
-DTEND;VALUE=DATE:20271117
-SUMMARY:Almflair Test-Sperre (15.-17.11.2027)
-DESCRIPTION:Testbelegung zur Pruefung des iCal-Imports. Keine echte Buchung.
-STATUS:CONFIRMED
-TRANSP:OPAQUE
-END:VEVENT
+
 END:VCALENDAR
