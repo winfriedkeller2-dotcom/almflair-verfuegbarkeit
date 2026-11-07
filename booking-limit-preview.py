@@ -4,8 +4,7 @@
 from datetime import date, timedelta
 
 # EINSTELLUNG: Maximale Vorausbuchungsfrist in Tagen
-BUCHUNGSFRIST_TAGE = 365
-
+BUCHUNGSFRIST_TAGE = int(__import__("os").environ.get("BUCHUNGSFRIST_TAGE", "365"))
 
 def berechne_buchungsgrenze(heute, tage):
     if tage < 1:
