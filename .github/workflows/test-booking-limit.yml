@@ -2,6 +2,12 @@ name: Test Almflair Buchungsgrenze
 
 on:
   workflow_dispatch:
+    inputs:
+      buchungsfrist_tage:
+        description: 'Maximale Vorausbuchungsfrist in Tagen'
+        required: true
+        default: '365'
+        type: string
 
 permissions:
   contents: read
@@ -16,4 +22,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Buchungsgrenze berechnen
+        env:
+          BUCHUNGSFRIST_TAGE: ${{ inputs.buchungsfrist_tage }}
         run: python3 booking-limit-preview.py
