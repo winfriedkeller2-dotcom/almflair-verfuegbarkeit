@@ -1,0 +1,19 @@
+name: Test Almflair Buchungsgrenze
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-booking-limit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Repository lesen
+        uses: actions/checkout@v4
+
+      - name: Buchungsgrenze berechnen
+        run: python3 booking-limit-preview.py
