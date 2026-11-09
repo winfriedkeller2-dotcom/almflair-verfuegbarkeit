@@ -1,0 +1,80 @@
+name: Almflair - Buchungsfrist einstellen
+
+on:
+  workflow_dispatch:
+    inputs:
+      buchungsfrist_tage:
+        description: "Neue Vorausbuchungsfrist in Tagen (1 bis 1095)"
+        required: true
+        default: "365"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: almflair-buchungsfrist-einstellen
+  cancel-in-progress: false
+
+jobs:
+  einstellung:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Neue Buchungsfrist pruefen und speichern
+        env:
+          NEUE_FRIST: ${{ inputs.buchungsfrist_tage }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          wert = os.environ["NEUE_FRIST"].strip()
+
+          if not wert.isdecimal():
+              raise ValueError("Bitte eine ganze Zahl eingeben.")
+
+          tage = int(wert)
+
+          if not 1 <= tage <= 1095:
+              raise ValueError("Erlaubt sind 1 bis 1095 Tage.")
+
+          datei = Path("booking-limit-config.json")
+
+          if not datei.is_file():
+              raise FileNotFoundError("Konfigurationsdatei fehlt.")
+
+          daten = json.loads(datei.read_text(encoding="utf-8"))
+          bisher = daten.get("buchungsfrist_tage")
+
+          daten["buchungsfrist_tage"] = tage
+
+          datei.write_text(
+              json.dumps(daten, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8"
+          )
+
+          print("Bisherige Frist:", bisher)
+          print("Neue Frist:", tage)
+          print("Konfiguration erfolgreich aktualisiert.")
+          PY
+
+      - name: Einstellung dauerhaft speichern
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add booking-limit-config.json
+
+          if git diff --cached --quiet; then
+            echo "Keine Aenderung erforderlich."
+          else
+            git commit -m "Update Almflair booking limit"
+            git push
+          fi
