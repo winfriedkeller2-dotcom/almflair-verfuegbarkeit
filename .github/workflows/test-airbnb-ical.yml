@@ -1,0 +1,21 @@
+name: Test Airbnb iCal Buchungsgrenze
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Repository lesen
+        uses: actions/checkout@v4
+
+      - name: Airbnb iCal analysieren
+        env:
+          AIRBNB_ICAL_URL: ${{ secrets.AIRBNB_ICAL_URL }}
+        run: python3 airbnb-ical-diagnose.py
