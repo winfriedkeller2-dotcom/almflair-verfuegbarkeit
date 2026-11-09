@@ -1,60 +1,51 @@
-# Almflair - Automatische Buchungsgrenze
-# TESTVERSION - keine produktiven Kalender veraendern
-
-import os
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# Grundeinstellungen
+# Almflair - variable Buchungsgrenze
+# TESTBETRIEB: Keine produktiven Kalender veraendern.
+
+KONFIGURATION = Path("booking-limit-config.json")
+TESTDATEI = Path("booking-limit-vorschau.ics")
+
 STANDARD_FRIST = 365
 MAXIMALE_FRIST = 1095
-VORSCHAU_ENDE_TAGE = 1460
-
-# Testdatei - nicht mit Portalen verbunden
-DATEINAME = "booking-limit-vorschau.ics"
+TESTHORIZONT_TAGE = 1460
 
 
 def buchungsfrist_lesen():
-    wert = os.environ.get(
-        "BUCHUNGSFRIST_TAGE", str(STANDARD_FRIST)
-    )
-    tage = int(wert)
-
-    if not 1 <= tage <= MAXIMALE_FRIST:
-        raise ValueError(
-            "Buchungsfrist muss zwischen 1 und "
-            "1095 Tagen liegen."
+    if not KONFIGURATION.is_file():
+        raise FileNotFoundError(
+            "Konfigurationsdatei fehlt: " + str(KONFIGURATION)
         )
+
+    daten = json.loads(KONFIGURATION.read_text(encoding="utf-8"))
+    tage = daten.get("buchungsfrist_tage")
+
+    if type(tage) is not int or not 1 <= tage <= MAXIMALE_FRIST:
+        raise ValueError(
+            "buchungsfrist_tage muss eine ganze Zahl "
+            "zwischen 1 und 1095 sein."
+        )
+
     return tage
 
 
 def kalender_erzeugen():
-    heute = datetime.now(
-        ZoneInfo("Europe/Vienna")
-    ).date()
-
+    heute = datetime.now(ZoneInfo("Europe/Vienna")).date()
     frist = buchungsfrist_lesen()
+
     grenze = heute + timedelta(days=frist)
-
-    # Am Grenztag darf noch abgereist werden.
-    # Die erste gesperrte Nacht beginnt am Grenztag.
     sperre_ab = grenze
-
-    # Testhorizont: 1460 Tage ab heute
-    sperre_bis = heute + timedelta(
-        days=VORSCHAU_ENDE_TAGE
-    )
+    sperre_bis = heute + timedelta(days=TESTHORIZONT_TAGE)
 
     if sperre_ab >= sperre_bis:
-        raise ValueError(
-            "Die Sperrgrenze liegt ausserhalb "
-            "des Testhorizonts."
-        )
+        raise ValueError("Sperrgrenze ausserhalb des Testhorizonts.")
 
-    zeitstempel = datetime.now(
-        ZoneInfo("UTC")
-    ).strftime("%Y%m%dT%H%M%SZ")
+    zeitstempel = datetime.now(timezone.utc).strftime(
+        "%Y%m%dT%H%M%SZ"
+    )
 
     zeilen = [
         "BEGIN:VCALENDAR",
@@ -75,28 +66,21 @@ def kalender_erzeugen():
         "END:VCALENDAR",
     ]
 
-    inhalt = "\r\n".join(zeilen) + "\r\n"
-
-    Path(DATEINAME).write_bytes(
-        inhalt.encode("utf-8")
+    TESTDATEI.write_bytes(
+        ("\r\n".join(zeilen) + "\r\n").encode("utf-8")
     )
 
-    print("ALMFLAIR - BUCHUNGSGRENZE TEST")
+    print("ALMFLAIR - AUTOMATISCHE BUCHUNGSGRENZE (TEST)")
     print("Heute:", heute.strftime("%d.%m.%Y"))
-    print("Buchungsfrist:", frist, "Tage")
-    print(
-       "Letzter erlaubter Abreisetag:",
-        grenze.strftime("%d.%m.%Y")
-    )
-    print(
-        "Sperre ab:",
-        sperre_ab.strftime("%d.%m.%Y")
-    )
-    print(
-        "Test-Sperre bis (exklusiv):",
-        sperre_bis.strftime("%d.%m.%Y")
-    )
-    print("Testdatei:", DATEINAME)
+    print("Konfiguration:", KONFIGURATION)
+    print("Vorausbuchungsfrist:", frist, "Tage")
+    print("Letzter erlaubter Abreisetag:",
+          grenze.strftime("%d.%m.%Y"))
+    print("Sperrbeginn:",
+          sperre_ab.strftime("%d.%m.%Y"))
+    print("Sperrende (exklusiv):",
+          sperre_bis.strftime("%d.%m.%Y"))
+    print("Erzeugte Testdatei:", TESTDATEI)
     print("Keine produktiven Kalender veraendert.")
 
 
