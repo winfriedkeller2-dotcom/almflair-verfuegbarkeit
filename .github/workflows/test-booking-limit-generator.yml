@@ -2,12 +2,8 @@ name: Test Almflair iCal-Generator
 
 on:
   workflow_dispatch:
-    inputs:
-      buchungsfrist_tage:
-        description: "Maximale Vorausbuchungsfrist in Tagen"
-        required: true
-        default: "365"
-        type: string
+  schedule:
+    - cron: "15 4 * * *"
 
 permissions:
   contents: read
@@ -22,20 +18,21 @@ jobs:
         uses: actions/checkout@v4
 
       - name: iCal-Testdatei erzeugen
-        env:
-          BUCHUNGSFRIST_TAGE: ${{ inputs.buchungsfrist_tage }}
         run: python3 booking-limit-generator.py
 
       - name: Testdatei validieren
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("booking-limit-vorschau.ics")
-          data = p.read_text(encoding="utf-8")
-          assert data.startswith("BEGIN:VCALENDAR")
-          assert "BEGIN:VEVENT" in data
-          assert "DTSTART;VALUE=DATE:" in data
-          assert "DTEND;VALUE=DATE:" in data
-          assert data.strip().endswith("END:VCALENDAR")
+
+          datei = Path("booking-limit-vorschau.ics")
+          inhalt = datei.read_text(encoding="utf-8")
+
+          assert inhalt.startswith("BEGIN:VCALENDAR")
+          assert "BEGIN:VEVENT" in inhalt
+          assert "DTSTART;VALUE=DATE:" in inhalt
+          assert "DTEND;VALUE=DATE:" in inhalt
+          assert inhalt.strip().endswith("END:VCALENDAR")
+
           print("iCal-Testdatei erfolgreich validiert.")
           PY
