@@ -1,0 +1,94 @@
+name: Almflair - Buchungsgrenze veroeffentlichen
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: almflair-buchungsgrenze-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Automatische iCal-Datei erzeugen
+        env:
+          BUCHUNGSGRENZE_DATEI: booking-limit-auto.ics
+        run: python3 booking-limit-generator.py
+
+      - name: iCal-Datei und Buchungsgrenze pruefen
+        run: |
+          python3 - <<'PY'
+          import json
+          from datetime import datetime, timedelta
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          datei = Path("booking-limit-auto.ics")
+          daten = datei.read_bytes()
+          text = daten.decode("utf-8")
+
+          config = json.loads(
+              Path("booking-limit-config.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          tage = config["buchungsfrist_tage"]
+          assert type(tage) is int
+          assert 1 <= tage <= 1095
+
+          heute = datetime.now(
+              ZoneInfo("Europe/Vienna")
+          ).date()
+
+          erwartet_ab = (
+              heute + timedelta(days=tage)
+          ).strftime("%Y%m%d")
+
+          erwartet_bis = (
+              heute + timedelta(days=1460)
+          ).strftime("%Y%m%d")
+
+          assert daten.startswith(b"BEGIN:VCALENDAR\r\n")
+          assert daten.endswith(b"END:VCALENDAR\r\n")
+          assert text.count("BEGIN:VEVENT") == 1
+          assert text.count("END:VEVENT") == 1
+
+          assert (
+              "DTSTART;VALUE=DATE:" + erwartet_ab
+          ) in text
+
+          assert (
+              "DTEND;VALUE=DATE:" + erwartet_bis
+          ) in text
+
+          print("iCal-Validierung erfolgreich.")
+          print("Buchungsfrist:", tage, "Tage")
+          print("Sperrbeginn:", erwartet_ab)
+          print("Sperrende exklusiv:", erwartet_bis)
+          PY
+
+      - name: Datei in GitHub speichern
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add booking-limit-auto.ics
+          git commit -m "Update Almflair booking limit calendar"
+          git push
+
+      - name: Abschlussmeldung
+        run: |
+          echo "Buchungsgrenze erfolgreich gespeichert."
+          echo "Keine Buchungsportale wurden veraendert."
