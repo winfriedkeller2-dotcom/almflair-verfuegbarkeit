@@ -2,6 +2,8 @@ name: Almflair - Buchungsgrenze veroeffentlichen
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "15 4 * * *"
 
 permissions:
   contents: write
@@ -13,7 +15,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Repository laden
@@ -64,14 +66,8 @@ jobs:
           assert daten.endswith(b"END:VCALENDAR\r\n")
           assert text.count("BEGIN:VEVENT") == 1
           assert text.count("END:VEVENT") == 1
-
-          assert (
-              "DTSTART;VALUE=DATE:" + erwartet_ab
-          ) in text
-
-          assert (
-              "DTEND;VALUE=DATE:" + erwartet_bis
-          ) in text
+          assert "DTSTART;VALUE=DATE:" + erwartet_ab in text
+          assert "DTEND;VALUE=DATE:" + erwartet_bis in text
 
           print("iCal-Validierung erfolgreich.")
           print("Buchungsfrist:", tage, "Tage")
@@ -85,10 +81,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add booking-limit-auto.ics
-          git commit -m "Update Almflair booking limit calendar"
-          git push
+
+          if git diff --cached --quiet; then
+            echo "Sperrdatei bereits aktuell."
+          else
+            git commit -m "Update Almflair booking limit calendar"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
 
       - name: Abschlussmeldung
         run: |
-          echo "Buchungsgrenze erfolgreich gespeichert."
+          echo "Almflair Buchungsgrenze verarbeitet."
           echo "Keine Buchungsportale wurden veraendert."
