@@ -1,0 +1,107 @@
+name: Almflair - Buchungsgrenze kontrollieren
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 18 * * *"
+      timezone: "Europe/Vienna"
+
+permissions:
+  contents: read
+
+jobs:
+  kontrollieren:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Oeffentliche Buchungsgrenze pruefen
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          import urllib.request
+          from datetime import datetime, timedelta
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          url = (
+              "https://winfriedkeller2-dotcom.github.io/"
+              "almflair-verfuegbarkeit/booking-limit-auto.ics"
+          )
+
+          heute = datetime.now(
+              ZoneInfo("Europe/Vienna")
+          ).date()
+
+          config = json.loads(
+              Path("booking-limit-config.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          tage = config["buchungsfrist_tage"]
+
+          if type(tage) is not int or not 1 <= tage <= 1095:
+              raise ValueError("Ungueltige Buchungsfrist.")
+
+          anfrage = urllib.request.Request(
+              url,
+              headers={
+                  "User-Agent": "Almflair-Kalenderkontrolle"
+              }
+          )
+
+          with urllib.request.urlopen(
+              anfrage, timeout=30
+          ) as antwort:
+              inhalt = antwort.read(100000).decode("utf-8")
+
+          if "BEGIN:VCALENDAR" not in inhalt:
+              raise ValueError("Keine gueltige iCal-Datei.")
+
+          if inhalt.count("BEGIN:VEVENT") != 1:
+              raise ValueError("Unerwartete Ereignisanzahl.")
+
+          def datum_lesen(feld):
+              muster = (
+                  r"^" + re.escape(feld)
+                  + r";VALUE=DATE:(\d{8})\s*$"
+              )
+              treffer = re.search(
+                  muster, inhalt, re.MULTILINE
+              )
+              if not treffer:
+                  raise ValueError("Kalenderfeld fehlt: " + feld)
+              return datetime.strptime(
+                  treffer.group(1), "%Y%m%d"
+              ).date()
+
+          beginn = datum_lesen("DTSTART")
+          ende = datum_lesen("DTEND")
+
+          erwartet = heute + timedelta(days=tage)
+          erwartet_ende = heute + timedelta(days=1460)
+
+          print("ALMFLAIR - KALENDERKONTROLLE")
+          print("Heute:", heute)
+          print("Buchungsfrist:", tage, "Tage")
+          print("Sperrbeginn:", beginn)
+          print("Erwarteter Beginn:", erwartet)
+          print("Sperrende:", ende)
+
+          if beginn != erwartet:
+              raise ValueError(
+                  "WARNUNG: Buchungsgrenze nicht aktuell!"
+              )
+
+          if ende != erwartet_ende:
+              raise ValueError(
+                  "WARNUNG: Sperrhorizont nicht aktuell!"
+              )
+
+          print("ERGEBNIS: Buchungsgrenze aktuell.")
+          PY
