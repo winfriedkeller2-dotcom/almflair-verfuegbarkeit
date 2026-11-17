@@ -1,3 +1,4 @@
+
 name: Almflair - Buchungsgrenze kontrollieren
 
 on:
@@ -33,9 +34,10 @@ jobs:
               "almflair-verfuegbarkeit/booking-limit-auto.ics"
           )
 
-          heute = datetime.now(
+          jetzt = datetime.now(
               ZoneInfo("Europe/Vienna")
-          ).date()
+          )
+          heute = jetzt.date()
 
           config = json.loads(
               Path("booking-limit-config.json").read_text(
@@ -51,7 +53,8 @@ jobs:
           anfrage = urllib.request.Request(
               url,
               headers={
-                  "User-Agent": "Almflair-Kalenderkontrolle"
+                  "User-Agent": "Almflair-Kalenderkontrolle",
+                  "Cache-Control": "no-cache"
               }
           )
 
@@ -75,7 +78,9 @@ jobs:
                   muster, inhalt, re.MULTILINE
               )
               if not treffer:
-                  raise ValueError("Kalenderfeld fehlt: " + feld)
+                  raise ValueError(
+                      "Kalenderfeld fehlt: " + feld
+                  )
               return datetime.strptime(
                   treffer.group(1), "%Y%m%d"
               ).date()
@@ -88,20 +93,37 @@ jobs:
 
           print("ALMFLAIR - KALENDERKONTROLLE")
           print("Heute:", heute)
+          print("Uhrzeit:", jetzt.strftime("%H:%M"))
           print("Buchungsfrist:", tage, "Tage")
           print("Sperrbeginn:", beginn)
           print("Erwarteter Beginn:", erwartet)
           print("Sperrende:", ende)
+          print("Erwartetes Ende:", erwartet_ende)
 
-          if beginn != erwartet:
-              raise ValueError(
-                  "WARNUNG: Buchungsgrenze nicht aktuell!"
+          ist_aktuell = (
+              beginn == erwartet
+              and ende == erwartet_ende
+          )
+
+          ist_vortag = (
+              beginn == erwartet - timedelta(days=1)
+              and ende == erwartet_ende - timedelta(days=1)
+          )
+
+          if ist_aktuell:
+              print(
+                  "ERGEBNIS: Buchungsgrenze aktuell."
               )
 
-          if ende != erwartet_ende:
-              raise ValueError(
-                  "WARNUNG: Sperrhorizont nicht aktuell!"
+          elif jetzt.hour < 9 and ist_vortag:
+              print(
+                  "HINWEIS: Vortagesstand innerhalb "
+                  "der Uebergangszeit akzeptiert."
               )
 
-          print("ERGEBNIS: Buchungsgrenze aktuell.")
+          else:
+              raise ValueError(
+                  "WARNUNG: Buchungsgrenze veraltet "
+                  "oder Datumsgrenzen fehlerhaft!"
+              )
           PY
