@@ -69,7 +69,7 @@ function reportHeight() {
   }
 }
 
-fetch("availability.json")
+fetch("availability.json", { cache: "no-store" })
   .then(response => {
     if (!response.ok) throw new Error("availability.json konnte nicht geladen werden");
     return response.json();
