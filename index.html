@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -18,14 +19,18 @@
     .available { background: #dff2df; border: 1px solid #8ebc8e; }
     .busy { background: #eee; color: #777; border: 1px solid #ccc; text-decoration: line-through; }
     .past { background: #eee; color: #777; border: 1px solid #ccc; }
+    .outside { background: #e4e4e4; color: #777; border: 1px solid #bbb; }
     .navigation button:disabled { opacity: 0.45; cursor: not-allowed; }
     .empty { background: transparent; }
-    .legend { display: flex; justify-content: center; gap: 24px; margin-top: 22px; font-size: 14px; }
+    .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; margin-top: 22px; font-size: 14px; }
     .legend-item { display: flex; align-items: center; gap: 7px; }
     .box { width: 18px; height: 18px; border-radius: 4px; }
-    .box.available, .box.busy { display: inline-block; }
+    .box.available, .box.busy, .box.outside { display: inline-block; }
     .note { text-align: center; margin-top: 14px; font-size: 13px; color: #666; }
-    @media (max-width: 650px) { .months { grid-template-columns: 1fr; } body { padding: 10px; } }
+    @media (max-width: 650px) {
+      .months { grid-template-columns: 1fr; }
+      body { padding: 10px; }
+    }
   </style>
 </head>
 <body>
@@ -34,139 +39,299 @@
     <button id="prev">‹ Zurück</button>
     <button id="next">Weiter ›</button>
   </div>
+
   <div id="months" class="months"></div>
+
   <div class="legend">
-    <div class="legend-item"><span class="box available"></span>verfügbar</div>
-    <div class="legend-item"><span class="box busy"></span>nicht verfügbar</div>
+    <div class="legend-item">
+      <span class="box available"></span>verfügbar
+    </div>
+    <div class="legend-item">
+      <span class="box busy"></span>nicht verfügbar
+    </div>
+    <div class="legend-item">
+      <span class="box outside"></span>noch nicht buchbar
+    </div>
   </div>
-  <div class="note">Angaben ohne Gewähr. Verfügbarkeit kann sich kurzfristig ändern.</div>
+
+  <div class="note">
+    Angaben ohne Gewähr. Verfügbarkeit kann sich kurzfristig ändern.
+  </div>
 </div>
+
 <script>
 const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const lastAvailableDay = new Date(2028, 0, 31);
-const lastStartMonth = new Date(2028, 0, 1); // Letzte Ansicht: Januar und Februar 2028.
+
 let busyDates = new Set();
+let bookingLimitStart = null;
+let lastStartMonth = null;
+
 let currentMonth = new Date();
 currentMonth.setDate(1);
 
-// Tagesvergleich ohne Uhrzeit: auch der heutige Tag gilt als nicht verfügbar.
-function todayStart() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-function firstCurrentMonth() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
+function dateKey(year, month, day) {
+  return year + "-"
+    + String(month + 1).padStart(2, "0") + "-"
+    + String(day).padStart(2, "0");
 }
 
-// Höhenmeldung an die einbettende Jimdo-Seite. Keine Buchungsdaten übertragen.
+// Maßgeblich ist das Datum in Österreich.
+function todayKey() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Vienna",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+
+  const values = {};
+  parts.forEach(part => {
+    values[part.type] = part.value;
+  });
+
+  return values.year + "-" + values.month + "-" + values.day;
+}
+
+function firstCurrentMonth() {
+  const key = todayKey();
+  return new Date(
+    Number(key.slice(0, 4)),
+    Number(key.slice(5, 7)) - 1,
+    1
+  );
+}
+
+// Buchungsgrenze aus der veröffentlichten iCal-Datei lesen.
+function parseBookingLimit(ics) {
+  if (!ics.includes("BEGIN:VCALENDAR")) {
+    throw new Error("Buchungsgrenze: ungültiger Kalender");
+  }
+
+  const events = ics.match(/^BEGIN:VEVENT\r?$/gm) || [];
+  if (events.length !== 1) {
+    throw new Error("Buchungsgrenze: unerwartete Ereignisanzahl");
+  }
+
+  const match = ics.match(
+    /^DTSTART;VALUE=DATE:(\d{8})\r?$/m
+  );
+
+  if (!match) {
+    throw new Error("Buchungsgrenze: DTSTART fehlt");
+  }
+
+  const raw = match[1];
+  const year = Number(raw.slice(0, 4));
+  const month = Number(raw.slice(4, 6));
+  const day = Number(raw.slice(6, 8));
+
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    testDate.getUTCFullYear() !== year ||
+    testDate.getUTCMonth() + 1 !== month ||
+    testDate.getUTCDate() !== day
+  ) {
+    throw new Error("Buchungsgrenze: ungültiges Datum");
+  }
+
+  return raw.slice(0, 4) + "-"
+    + raw.slice(4, 6) + "-"
+    + raw.slice(6, 8);
+}
+
+// Höhe an die Jimdo-Seite melden.
 function reportHeight() {
   const content = document.querySelector(".calendar-wrap");
-  const height = Math.ceil(content.getBoundingClientRect().bottom +
-    parseFloat(getComputedStyle(document.body).paddingBottom || "0"));
+  const height = Math.ceil(
+    content.getBoundingClientRect().bottom +
+    parseFloat(getComputedStyle(document.body).paddingBottom || "0")
+  );
+
   if (window.parent !== window) {
-    window.parent.postMessage({ type: "almflair-calendar-height", height }, "*");
+    window.parent.postMessage(
+      { type: "almflair-calendar-height", height },
+      "*"
+    );
   }
 }
 
-fetch("availability.json", { cache: "no-store" })
-  .then(response => {
-    if (!response.ok) throw new Error("availability.json konnte nicht geladen werden");
-    return response.json();
-  })
-  .then(data => {
-    busyDates = new Set(data.busy || []);
-    render();
-  })
-  .catch(error => {
-    console.error(error);
-    document.getElementById("months").innerHTML =
-      "<p>Der Verfügbarkeitskalender konnte momentan nicht geladen werden.</p>";
-    reportHeight();
-  });
+// Bestehende Belegungen und neue Buchungsgrenze laden.
+Promise.all([
+  fetch("availability.json", { cache: "no-store" })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("availability.json konnte nicht geladen werden");
+      }
+      return response.json();
+    }),
 
-function dateKey(year, month, day) {
-  return year + "-" + String(month + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0");
-}
+  fetch("booking-limit-auto.ics", { cache: "no-store" })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("Buchungsgrenze konnte nicht geladen werden");
+      }
+      return response.text();
+    })
+])
+.then(([data, ics]) => {
+  if (!Array.isArray(data.busy)) {
+    throw new Error("Ungültige Verfügbarkeitsdaten");
+  }
+
+  const limit = parseBookingLimit(ics);
+
+  busyDates = new Set(data.busy);
+  bookingLimitStart = limit;
+
+  lastStartMonth = new Date(
+    Number(limit.slice(0, 4)),
+    Number(limit.slice(5, 7)) - 1,
+    1
+  );
+
+  render();
+})
+.catch(error => {
+  console.error(error);
+
+  document.getElementById("months").innerHTML =
+    "<p>Der Verfügbarkeitskalender konnte momentan nicht geladen werden.</p>";
+
+  document.getElementById("prev").disabled = true;
+  document.getElementById("next").disabled = true;
+
+  reportHeight();
+});
 
 function createMonth(date) {
   const year = date.getFullYear();
   const month = date.getMonth();
+
   const container = document.createElement("div");
+
   const title = document.createElement("div");
   title.className = "month-title";
-  title.textContent = date.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  title.textContent = date.toLocaleDateString("de-DE", {
+    month: "long",
+    year: "numeric"
+  });
   container.appendChild(title);
+
   const calendar = document.createElement("div");
   calendar.className = "calendar";
+
   weekdays.forEach(day => {
     const el = document.createElement("div");
     el.className = "weekday";
     el.textContent = day;
     calendar.appendChild(el);
   });
+
   const firstDay = new Date(year, month, 1);
   const offset = (firstDay.getDay() + 6) % 7;
+
   for (let i = 0; i < offset; i++) {
     const empty = document.createElement("div");
     empty.className = "day empty";
     calendar.appendChild(empty);
   }
+
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = todayKey();
+
   for (let day = 1; day <= daysInMonth; day++) {
     const key = dateKey(year, month, day);
+
     const el = document.createElement("div");
     el.className = "day";
     el.textContent = day;
-    const cellDate = new Date(year, month, day);
-    if (cellDate <= todayStart()) {
+
+    if (key <= today) {
       el.classList.add("past");
       el.title = "Vergangenes Datum / heute – nicht verfügbar";
-    } else if (cellDate > lastAvailableDay) {
-      el.classList.add("past");
-      el.title = "Außerhalb des freigegebenen Buchungszeitraums – nicht verfügbar";
+
     } else if (busyDates.has(key)) {
       el.classList.add("busy");
       el.title = "Nicht verfügbar";
+
+    } else if (key >= bookingLimitStart) {
+      el.classList.add("outside");
+      el.title = "Außerhalb des Buchungszeitraums – noch nicht buchbar";
+
     } else {
       el.classList.add("available");
       el.title = "Verfügbar";
     }
+
     calendar.appendChild(el);
   }
+
   container.appendChild(calendar);
   return container;
 }
 
 function render() {
-  if (currentMonth < firstCurrentMonth()) currentMonth = firstCurrentMonth();
-  if (currentMonth > lastStartMonth) currentMonth = new Date(lastStartMonth);
-  document.getElementById("prev").disabled = currentMonth <= firstCurrentMonth();
-  document.getElementById("next").disabled = currentMonth >= lastStartMonth;
+  if (!bookingLimitStart || !lastStartMonth) return;
+
+  const firstMonth = firstCurrentMonth();
+
+  if (currentMonth < firstMonth) {
+    currentMonth = firstMonth;
+  }
+
+  if (currentMonth > lastStartMonth) {
+    currentMonth = new Date(lastStartMonth);
+  }
+
+  document.getElementById("prev").disabled =
+    currentMonth <= firstMonth;
+
+  document.getElementById("next").disabled =
+    currentMonth >= lastStartMonth;
+
   const months = document.getElementById("months");
   months.innerHTML = "";
-  const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-  const second = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+
+  const first = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth(),
+    1
+  );
+
+  const second = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth() + 1,
+    1
+  );
+
   months.appendChild(createMonth(first));
   months.appendChild(createMonth(second));
+
   requestAnimationFrame(reportHeight);
 }
 
 document.getElementById("prev").addEventListener("click", () => {
   if (currentMonth <= firstCurrentMonth()) return;
+
   currentMonth.setMonth(currentMonth.getMonth() - 1);
   render();
 });
+
 document.getElementById("next").addEventListener("click", () => {
-  if (currentMonth >= lastStartMonth) return;
+  if (!lastStartMonth || currentMonth >= lastStartMonth) return;
+
   currentMonth.setMonth(currentMonth.getMonth() + 1);
   render();
 });
+
 window.addEventListener("resize", reportHeight);
 window.addEventListener("load", reportHeight);
-// Beim Start und nach Größenänderungen des Inhalts erneut melden.
+
 if (typeof ResizeObserver !== "undefined") {
-  new ResizeObserver(reportHeight).observe(document.querySelector(".calendar-wrap"));
+  new ResizeObserver(reportHeight).observe(
+    document.querySelector(".calendar-wrap")
+  );
 }
 </script>
 </body>
